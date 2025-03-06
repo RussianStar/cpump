@@ -23,6 +23,7 @@ static void send_esp_now_message(PumpCommandType cmd, const PumpCmdMessage* msg)
 }
 
 static void on_espnow_receive(const uint8_t *mac, const uint8_t *incomingData, int len) {
+    static xTimerHandle pump_timer = NULL; // Added timer handle
     if (len != sizeof(PumpCmdMessage)) return;
 
     PumpCmdMessage* msg = (PumpCmdMessage*)incomingData;
@@ -49,7 +50,7 @@ static void on_espnow_receive(const uint8_t *mac, const uint8_t *incomingData, i
             send_esp_now_message(CMD_STATUS_REPLY, &response); // Need to define CMD_STATUS_REPLY in enums
             break;
         }
-        case CMD_START_PUMP: {
+        case CMD_START_PUMP: { 
             ESP_LOGI(TAG, "Starting pump for %d seconds", msg->duration);
             gpio_set_level_ptr(PUMP_GPIO, 1);
 
@@ -57,9 +58,22 @@ static void on_espnow_receive(const uint8_t *mac, const uint8_t *incomingData, i
             response.valve2 = msg->valve2;
             response.valve3 = msg->valve3;
 
-            xTimerHandle timer = xTimerCreate("PumpStop", pdMS_TO_TICKS(msg->duration * 1000), pdFALSE, NULL, [](TimerHandle_t xTimer) {
-                // Stop pump and valves
-            });
+            if (pump_timer) {
+                xTimerStop(pump_timer, 0);
+                vTimerDelete(pump_timer);
+            }
+            pump_timer = xTimerCreate("PumpStop", 
+                                    pdMS_TO_TICKS(msg->duration * 1000), 
+                                    pdFALSE, 
+                                    NULL, 
+                                    [](TimerHandle_t xTimer) {
+                                        gpio_set_level_ptr(PUMP_GPIO, 0);
+                                        ESP_LOGI(TAG, "Pump stopped automatically");
+                                        pump_timer = NULL;
+                                    });
+            if (pump_timer && xTimerStart(pump_timer, 0) != pdPASS) {
+                ESP_LOGE(TAG, "Failed to start pump timer");
+            }
             break;
         }
     }
