@@ -76,6 +76,17 @@ static void on_espnow_receive(const uint8_t *mac, const uint8_t *incomingData, i
             }
             break;
         }
+
+        case CMD_STOP_PUMP: { // New stop command handling
+            if (pump_timer) {
+                xTimerStop(pump_timer, 0);
+                vTimerDelete(pump_timer);
+                pump_timer = NULL;
+            }
+            gpio_set_level_ptr(PUMP_GPIO, 0);
+            ESP_LOGI(TAG, "Pump stopped manually");
+            break;
+        }
     }
 }
 
