@@ -101,5 +101,12 @@ static void on_espnow_receive(const uint8_t *mac, const uint8_t *incomingData, i
 }
 
 void app_main() {
-    // Initialization code remains similar but uses PumpCmdMessage structs
+    // Initialize ESP-NOW
+    esp_now_init();
+    esp_now_register_recv_cb(on_espnow_receive);
+
+    // Send initial status report
+    PumpStatusMessage init_status = {CMD_STATUS_REPLY};
+    init_status.battery_soc = 42; // Dummy value until real sensor is connected
+    send_esp_now_message(CMD_STATUS_REPLY, &init_status);
 }
