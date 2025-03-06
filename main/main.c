@@ -67,8 +67,13 @@ static void on_espnow_receive(const uint8_t *mac, const uint8_t *incomingData, i
                                     pdFALSE, 
                                     NULL, 
                                     [](TimerHandle_t xTimer) {
+                                        // Close all valves when stopping
+                                        gpio_set_level_ptr(VALVE_1_GPIO, 0);
+                                        gpio_set_level_ptr(VALVE_2_GPIO, 0);
+                                        gpio_set_level_ptr(VALVE_3_GPIO, 0);
+
                                         gpio_set_level_ptr(PUMP_GPIO, 0);
-                                        ESP_LOGI(TAG, "Pump stopped automatically");
+                                        ESP_LOGI(TAG, "Pump and valves stopped automatically");
                                         pump_timer = NULL;
                                     });
             if (pump_timer && xTimerStart(pump_timer, 0) != pdPASS) {
@@ -77,16 +82,21 @@ static void on_espnow_receive(const uint8_t *mac, const uint8_t *incomingData, i
             break;
         }
 
-        case CMD_STOP_PUMP: { // New stop command handling
-            if (pump_timer) {
-                xTimerStop(pump_timer, 0);
-                vTimerDelete(pump_timer);
-                pump_timer = NULL;
+            case CMD_STOP_PUMP: { // New stop command handling
+                if (pump_timer) {
+                    xTimerStop(pump_timer, 0);
+                    vTimerDelete(pump_timer);
+                    pump_timer = NULL;
+                }
+                gpio_set_level_ptr(PUMP_GPIO, 0);
+
+                // Close all valves when stopping
+                gpio_set_level_ptr(VALVE_1_GPIO, 0);
+                gpio_set_level_ptr(VALVE_2_GPIO, 0);
+                gpio_set_level_ptr(VALVE_3_GPIO, 0);
+                ESP_LOGI(TAG, "Pump and valves stopped manually");
+                break;
             }
-            gpio_set_level_ptr(PUMP_GPIO, 0);
-            ESP_LOGI(TAG, "Pump stopped manually");
-            break;
-        }
     }
 }
 
