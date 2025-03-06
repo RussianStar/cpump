@@ -30,15 +30,16 @@ static void on_espnow_receive(const uint8_t *mac, const uint8_t *incomingData, i
     
     switch(msg->command) {
         case CMD_SYNC_REQUEST: { // Handle sync command
-            struct timeval tv;
-            tv.tv_sec = msg->synced_time; 
-            settimeofday(&tv, NULL);
-            ESP_LOGI(TAG, "Synced system clock to %lu", (unsigned long)tv.tv_sec);
+            struct timeval old_tv, new_tv;
+            gettimeofday(&old_tv, NULL);
+            new_tv.tv_sec = msg->synced_time; 
+            settimeofday(&new_tv, NULL);
+            ESP_LOGI(TAG, "Synced system clock from %lu to %lu", (unsigned long)old_tv.tv_sec, (unsigned long)new_tv.tv_sec);
             break;
         }
         case CMD_STATUS_REQUEST: {
             // Prepare status reply using PumpStatusMessage
-            PumpStatusMessage response = {CMD_STATUS_REQUEST};
+            PumpStatusMessage response = {CMD_STATUS_REPLY};
             response.timestamp = time(NULL); 
             response.battery_soc = 42; // Dummy value - replace with actual reading
             for (int i=0; i<3; i++) {
@@ -73,6 +74,20 @@ static void on_espnow_receive(const uint8_t *mac, const uint8_t *incomingData, i
                                         gpio_set_level_ptr(VALVE_3_GPIO, 0);
 
                                         gpio_set_level_ptr(PUMP_GPIO, 0);
+                                        
+                                        // Send completion status
+                                        PumpStatusMessage response;
+                                        response.command = CMD_STATUS_REPLY;
+                                        response.timestamp = time(NULL);
+                                        response.battery_soc = 42; // Dummy value until real sensor is connected
+                                        for (int i=0; i<3; i++) {
+                                            response.valve1 = gpio_get_level(VALVE_1_GPIO);
+                                            response.valve2 = gpio_get_level(VALVE_2_GPIO);
+                                            response.valve3 = gpio_get_level(VALVE_3_GPIO);
+                                        }
+                                        
+                                        send_esp_now_message(CMD_STATUS_REPLY, &response);
+                                        
                                         ESP_LOGI(TAG, "Pump and valves stopped automatically");
                                         pump_timer = NULL;
                                     });
@@ -95,6 +110,19 @@ static void on_espnow_receive(const uint8_t *mac, const uint8_t *incomingData, i
                 gpio_set_level_ptr(VALVE_2_GPIO, 0);
                 gpio_set_level_ptr(VALVE_3_GPIO, 0);
                 ESP_LOGI(TAG, "Pump and valves stopped manually");
+                
+                // Send status after stopping
+                PumpStatusMessage response;
+                response.command = CMD_STATUS_REPLY;
+                response.timestamp = time(NULL);
+                response.battery_soc = 42; // Dummy value until real sensor is connected
+                for (int i=0; i<3; i++) {
+                    response.valve1 = gpio_get_level(VALVE_1_GPIO);
+                    response.valve2 = gpio_get_level(VALVE_2_GPIO);
+                    response.valve3 = gpio_get_level(VALVE_3_GPIO);
+                }
+                
+                send_esp_now_message(CMD_STATUS_REPLY, &response);
                 break;
             }
     }
